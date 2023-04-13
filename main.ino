@@ -11,6 +11,8 @@ public:
   void sendState() {
     joyState.xAxis = map(joystickState[0], 0, 4095, -512, 511);
     joyState.yAxis = map(joystickState[1], 0, 4095, -512, 511);
+    joyState.yAxis2 = map(joystickState[2], 0, 4095, -512, 511);
+    joyState.zAxis = map(joystickState[3], 0, 4095, -512, 511);
     HID().SendReport(JOYSTICK_REPORT_ID, &joyState, sizeof(joyState));
   }
 
@@ -23,16 +25,18 @@ USBHID HID(1);
 Joystick joystick;
 
 // DMA 采样配置
-const int adcPin = 36;
+const int adcPins[] = {34, 35, 36, 39}; // 四个 ADC 引脚
 const int dmaChannel = 0;
-const int dmaSize = 2;
+const int dmaSize = 4;
 const int dmaPrio = 1;
 const int dmaNum = 1;
 static DRAM_ATTR lldesc_t dmaDesc[dmaNum];
 
 void dmaInit() {
-  adc1_config_width(ADC_WIDTH_BIT_12);
-  adc1_config_channel_atten((adc1_channel_t)adcPin, ADC_ATTEN_DB_11);
+  for (int i = 0; i < 4; i++) {
+    adc1_config_width(ADC_WIDTH_BIT_12);
+    adc1_config_channel_atten((adc1_channel_t)adcPins[i], ADC_ATTEN_DB_11);
+  }
   adc1_dma_enable();
 
   for (int i = 0; i < dmaNum; i++) {
@@ -78,7 +82,11 @@ void dmaInit() {
 void dmaStart() {
   dmaInit();
 
-  int rc = dma_desc_init(dmaChannel, &dmaDesc[0],
+  int rc = dma_desc_init(dmaChannel, &dmaDesc[0], dmaNum);
+  if (rc != ESP_OK) {
+    Serial.println("Failed to initialize ADC DMA");
+  }
+
   rc = dma_start(dmaChannel, &dmaDesc[0], dmaNum);
   if (rc != ESP_OK) {
     Serial.println("Failed to start ADC DMA");
